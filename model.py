@@ -39,7 +39,7 @@ while True:
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
     # Display the frame
-    cv2.imshow("YOLO Hand Gesture Detection", annotated_frame)
+    cv2.imshow("Snakes Game With Hand Gesture", annotated_frame)
 
     # Exit if 'q' is pressed
     if cv2.waitKey(1) & 0xFF == ord('q'):
