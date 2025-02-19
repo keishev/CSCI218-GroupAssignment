@@ -8,7 +8,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using device: {device}")
 
 # Load the YOLOv8 model (model itself doesn't take 'device' argument)
-model = YOLO("yolo11n.pt")
+model = YOLO("yolo11x.pt")
 
 # Open the webcam
 cap = cv2.VideoCapture(0)

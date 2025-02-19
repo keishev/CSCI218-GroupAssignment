@@ -4,16 +4,16 @@ import argparse
 from sklearn.model_selection import train_test_split
 
 def split_dataset(data_dir, test_size=0.2, random_state=None):
-    # Create training and testing directories
-    train_dir = os.path.join(data_dir, 'training')
-    test_dir = os.path.join(data_dir, 'testing')
+    # Create train and val directories
+    train_dir = os.path.join(data_dir, 'train')
+    test_dir = os.path.join(data_dir, 'val')
     os.makedirs(train_dir, exist_ok=True)
     os.makedirs(test_dir, exist_ok=True)
 
     # Iterate over each class directory
     for class_name in os.listdir(data_dir):
-        if class_name in ['training', 'testing']:
-            continue  # Skip the training and testing directories
+        if class_name in ['train', 'val']:
+            continue  # Skip the train and val directories
 
         class_dir = os.path.join(data_dir, class_name)
         if not os.path.isdir(class_dir):
@@ -25,7 +25,7 @@ def split_dataset(data_dir, test_size=0.2, random_state=None):
             print(f"No files found in {class_dir}, skipping.")
             continue
 
-        # Split the files into training and testing sets
+        # Split the files into train and val sets
         train_files, test_files = train_test_split(
             files,
             test_size=test_size,
@@ -45,10 +45,10 @@ def split_dataset(data_dir, test_size=0.2, random_state=None):
         for f in test_files:
             shutil.move(os.path.join(class_dir, f), test_class_dir)
 
-        print(f"Class {class_name}: {len(train_files)} training, {len(test_files)} testing samples.")
+        print(f"Class {class_name}: {len(train_files)} train, {len(test_files)} val samples.")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Split dataset into training and testing sets.')
+    parser = argparse.ArgumentParser(description='Split dataset into train and val sets.')
     parser.add_argument('--data_dir', type=str, default='data',
                         help='Path to the dataset directory (default: data)')
     parser.add_argument('--test_size', type=float, default=0.2,
