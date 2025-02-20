@@ -44,7 +44,8 @@ function App() {
           setIsGameActive(true);
           setGameOver(false);
           startWebSocketConnection();
-        }, 6000); 
+        }, 6000);
+      
       } else {
         Swal.fire("Error", "Failed to start the webcam. Please try again.", "error");
         setShowStartScreen(true);
@@ -67,7 +68,6 @@ function App() {
 
     socketRef.current.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      if (!isGameActive) return;
 
       const gestureDirection = gestureToDirection[data.gesture];
       if (gestureDirection) {
@@ -96,7 +96,7 @@ function App() {
 
   useEffect(() => {
     if (isGameActive) {
-      gameLoopRef.current = setInterval(moveSnake, 200);
+      gameLoopRef.current = setInterval(moveSnake, 1000);
     } else {
       clearInterval(gameLoopRef.current);
     }
