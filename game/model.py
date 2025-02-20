@@ -6,6 +6,8 @@ import websockets
 import json
 import sys
 from ultralytics import YOLO
+from flask import Flask, Response
+from threading import Thread
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using device: {device}")
@@ -21,9 +23,22 @@ if not cap.isOpened():
     cap.release()
     sys.exit()
 
-prev_time = time.time()
+app = Flask(__name__)
 clients = set()
-server = None
+prev_time = time.time()
+
+@app.route('/video_feed')
+def video_feed():
+    def generate_frames():
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            ret, buffer = cv2.imencode('.jpg', frame)
+            frame = buffer.tobytes()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 async def send_predictions(websocket):
     global prev_time
@@ -47,23 +62,6 @@ async def send_predictions(websocket):
             })
 
             await websocket.send(data)
-
-            annotated_frame = prediction.plot().copy()
-
-            curr_time = time.time()
-            fps = 1 / (curr_time - prev_time) if (curr_time - prev_time) > 0 else 0
-            prev_time = curr_time
-
-            cv2.putText(annotated_frame, f"FPS: {fps:.2f}", (10, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-
-            cv2.imshow("YOLO Hand Gesture Detection", annotated_frame)
-
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                print("Quit signal received. Closing application...")
-                await shutdown()
-                break
-
             await asyncio.sleep(0.1)
 
     except websockets.exceptions.ConnectionClosed:
@@ -72,42 +70,22 @@ async def send_predictions(websocket):
         clients.remove(websocket)
 
 async def websocket_server():
-    global server
-    server = await websockets.serve(
-        send_predictions, "0.0.0.0", 5001
-    )
-    await server.wait_closed()
+    async with websockets.serve(send_predictions, "0.0.0.0", 5001):
+        await asyncio.Future()
 
-async def shutdown():
-    print("Shutting down gracefully...")
-
-    if server:
-        server.close()
-        await server.wait_closed()
-
-    for ws in clients:
-        await ws.close()
-
-    cap.release()
-    cv2.destroyAllWindows()
-
-    tasks = [t for t in asyncio.all_tasks() if not t.done()]
-    for task in tasks:
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
-
-    loop = asyncio.get_running_loop()
-    loop.stop()
+def start_flask_app():
+    app.run(host="0.0.0.0", port=5002)
 
 if __name__ == "__main__":
+    print("Starting Flask server for video feed on http://localhost:5002/video_feed")
     print("WebSocket Server running on ws://localhost:5001")
+
+    flask_thread = Thread(target=start_flask_app)
+    flask_thread.start()
+
     try:
         asyncio.run(websocket_server())
     except KeyboardInterrupt:
-        print("Manual interrupt received.")
-        asyncio.run(shutdown())
-    finally:
-        print("Application closed successfully.")
+        print("Shutting down gracefully...")
+        cap.release()
+        cv2.destroyAllWindows()

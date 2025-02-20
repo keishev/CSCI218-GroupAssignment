@@ -3,7 +3,6 @@ import Swal from "sweetalert2";
 import Board from "./components/Board";
 import "./styles/global/App.css";
 
-const GRID_SIZE = 20;
 const BOARD_SIZE = 15;
 
 const gestureToDirection = {
@@ -22,45 +21,78 @@ function App() {
   const [snake, setSnake] = useState([{ x: 5, y: 5 }]);
   const [food, setFood] = useState(getRandomPosition());
   const [direction, setDirection] = useState("RIGHT");
-  const [isGameActive, setIsGameActive] = useState(false); // Start with the game inactive
+  const [isGameActive, setIsGameActive] = useState(false);
   const [score, setScore] = useState(0);
-  const [showStartScreen, setShowStartScreen] = useState(true); // Show start screen initially
+  const [showStartScreen, setShowStartScreen] = useState(true);
+  const [showLoadingScreen, setShowLoadingScreen] = useState(false);
+  const [gameOver, setGameOver] = useState(false);
   const gameLoopRef = useRef(null);
+  const socketRef = useRef(null);
 
-  const startGame = () => {
+  const startGame = async () => {
     setShowStartScreen(false);
-    setIsGameActive(true);
+    setShowLoadingScreen(true);
+    try {
+      const response = await fetch("http://localhost:5003/start-camera");
+      const data = await response.json();
+      console.log(data.status);
+
+      if (data) {
+        Swal.fire("Success", "Webcam started successfully! Get ready to play!", "success");
+        setTimeout(() => {
+          setShowLoadingScreen(false);
+          setIsGameActive(true);
+          setGameOver(false);
+          startWebSocketConnection();
+        }, 6000); 
+      } else {
+        Swal.fire("Error", "Failed to start the webcam. Please try again.", "error");
+        setShowStartScreen(true);
+        setShowLoadingScreen(false);
+      }
+    } catch (error) {
+      console.error("Failed to start the webcam:", error);
+      Swal.fire("Error", "Failed to start the webcam. Please try again.", "error");
+      setShowStartScreen(true);
+      setShowLoadingScreen(false);
+    }
   };
 
-  useEffect(() => {
-    const socket = new WebSocket("ws://localhost:5001");
+  const startWebSocketConnection = () => {
+    socketRef.current = new WebSocket("ws://localhost:5001");
 
-    socket.onopen = () => {
+    socketRef.current.onopen = () => {
       console.log("WebSocket connection established");
     };
 
-    socket.onmessage = (event) => {
+    socketRef.current.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (!isGameActive) return;
 
       const gestureDirection = gestureToDirection[data.gesture];
-
-      if (gestureDirection === "LEFT" && direction !== "RIGHT") setDirection("LEFT");
-      if (gestureDirection === "RIGHT" && direction !== "LEFT") setDirection("RIGHT");
-      if (gestureDirection === "UP" && direction !== "DOWN") setDirection("UP");
-      if (gestureDirection === "DOWN" && direction !== "UP") setDirection("DOWN");
+      if (gestureDirection) {
+        setDirection(prevDirection => {
+          if (
+            (gestureDirection === "LEFT" && prevDirection !== "RIGHT") ||
+            (gestureDirection === "RIGHT" && prevDirection !== "LEFT") ||
+            (gestureDirection === "UP" && prevDirection !== "DOWN") ||
+            (gestureDirection === "DOWN" && prevDirection !== "UP")
+          ) {
+            return gestureDirection;
+          }
+          return prevDirection;
+        });
+      }
     };
 
-    socket.onerror = (error) => {
+    socketRef.current.onerror = (error) => {
       console.error("WebSocket Error: ", error);
     };
 
-    socket.onclose = () => {
+    socketRef.current.onclose = () => {
       console.log("WebSocket connection closed");
     };
-
-    return () => socket.close();
-  }, [direction, isGameActive]);
+  };
 
   useEffect(() => {
     if (isGameActive) {
@@ -88,7 +120,6 @@ function App() {
       newSnake.some((segment) => segment.x === head.x && segment.y === head.y)
     ) {
       showGameOverAlert();
-      setIsGameActive(false);
       return;
     }
 
@@ -104,6 +135,9 @@ function App() {
   };
 
   const showGameOverAlert = () => {
+    setGameOver(true);
+    setIsGameActive(false);
+    if (socketRef.current) socketRef.current.close();
     Swal.fire({
       title: 'Game Over!',
       text: `Your score: ${score}. Do you want to play again?`,
@@ -119,6 +153,8 @@ function App() {
         setDirection("RIGHT");
         setIsGameActive(true);
         setScore(0);
+        setGameOver(false);
+        startWebSocketConnection();
       } else {
         setIsGameActive(false);
         setShowStartScreen(true);
@@ -135,11 +171,22 @@ function App() {
             Start Game
           </button>
         </div>
+      ) : showLoadingScreen ? (
+        <div className="loading-screen">
+          <h1>Initializing Webcam... Please wait :)</h1>
+          <div className="loader"></div>
+        </div>
       ) : (
-        <>
-          <Board snake={snake} food={food} boardSize={BOARD_SIZE} score={score} />
-          {!isGameActive && <h3>Game is not active. Please restart to play again.</h3>}
-        </>
+        <div className="game-and-camera-container">
+          <div className="game-area">
+            <Board snake={snake} food={food} boardSize={BOARD_SIZE} score={score} />
+            {gameOver && <h3>Game Over! Your score: {score}</h3>}
+          </div>
+          <div className="camera-feed">
+            <h2>Webcam Feed</h2>
+            <img src="http://localhost:5002/video_feed" alt="Webcam Feed" />
+          </div>
+        </div>
       )}
     </div>
   );
