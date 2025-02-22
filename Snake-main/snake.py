@@ -1,5 +1,11 @@
 import pygame,sys,random, threading, time
 from pygame.math import Vector2
+import numpy as np
+
+
+START, PLAYING = "START", "PLAYING"
+game_state = START
+
 
 class SNAKE:
 	def __init__(self):
@@ -108,6 +114,22 @@ class FRUIT:
 		self.x = random.randint(0,cell_number - 1)
 		self.y = random.randint(0,cell_number - 1)
 		self.pos = Vector2(self.x,self.y)
+class Screen:
+    def __init__(self, screen, game_font):
+        self.screen = screen
+        self.game_font = game_font
+
+    def draw_start_screen(self):
+        self.screen.fill((50, 50, 50))  # Dark background
+        title_text = self.game_font.render("Snake Game with Hand Gesture Control", True, (255, 255, 255))
+        instruction_text = self.game_font.render("Press SPACE to Start", True, (255, 255, 255))
+
+        title_rect = title_text.get_rect(center=(screen_width // 2, screen_height // 3))
+        instruction_rect = instruction_text.get_rect(center=(screen_width // 2, screen_height // 2))
+
+        self.screen.blit(title_text, title_rect)
+        self.screen.blit(instruction_text, instruction_rect)
+
 
 class MAIN:
 	def __init__(self):
@@ -245,9 +267,9 @@ def input_handler():
                     main_game.snake.direction = Vector2(0, -1)
                 elif top1_label == "dislike" and main_game.snake.direction.y != -1:
                     main_game.snake.direction = Vector2(0, 1)
-                elif top1_label == "stop" and main_game.snake.direction.x != 1:
+                elif top1_label == "fist" and main_game.snake.direction.x != 1:
                     main_game.snake.direction = Vector2(-1, 0)
-                elif top1_label == "stop_inverted" and main_game.snake.direction.x != -1:
+                elif top1_label == "ok" and main_game.snake.direction.x != -1:
                     main_game.snake.direction = Vector2(1, 0)
 
         text = f"{top1_label} ({float(top1_conf):.2f})"
@@ -271,28 +293,53 @@ input_thread.start()
 
 shared_frame = None
 frame_lock = threading.Lock()
+screen_manager = Screen(screen, game_font)
+
 
 while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
+        elif event.type == pygame.KEYDOWN:
+            if game_state == START and event.key == pygame.K_SPACE:
+                game_state = PLAYING
+                print("Game state changed to PLAYING")
 
-    with game_update_lock:
-        if game_update_flag:
-            main_game.update()
-            game_update_flag = False
+    if game_state == START:
+        screen.fill((50, 50, 50)) 
+        screen_manager.draw_start_screen()
 
-    screen.fill((175, 215, 70))
-    main_game.draw_elements()
+    elif game_state == PLAYING:
+        screen.fill((175, 215, 70)) 
+        with game_update_lock:
+            if game_update_flag:
+                main_game.update()
+                game_update_flag = False
 
-    # Draw the webcam feed with YOLO inference
-    if shared_frame is not None:
-        frame = cv2.resize(shared_frame, (webcam_width, screen_height))
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frame_surface = pygame.surfarray.make_surface(frame.swapaxes(0, 1))
-        screen.blit(frame_surface, (cell_number * cell_size, 0))
+        main_game.draw_elements()
+
+        with frame_lock:
+            if shared_frame is not None:
+                try:
+                    frame = cv2.resize(shared_frame, (webcam_width, screen_height))
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    frame_surface = pygame.surfarray.make_surface(frame.swapaxes(0, 1))
+                    screen.blit(frame_surface, (cell_number * cell_size, 0))
+                except Exception as e:
+                    print(f"Error displaying webcam feed: {e}")
+
+     
+        if not 0 <= main_game.snake.body[0].x < cell_number or not 0 <= main_game.snake.body[0].y < cell_number:
+            print("Collision with wall. Resetting game...")
+            main_game.snake.reset()
+            game_state = START
+
+        for block in main_game.snake.body[1:]:
+            if block == main_game.snake.body[0]:
+                print("Collision with self. Resetting game...")
+                main_game.snake.reset()
+                game_state = START
 
     pygame.display.update()
     clock.tick(60)
-
