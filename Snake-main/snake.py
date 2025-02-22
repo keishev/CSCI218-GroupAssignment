@@ -3,9 +3,10 @@ from pygame.math import Vector2
 import numpy as np
 
 
-START, PLAYING = "START", "PLAYING"
-game_state = START
-
+START, PLAYING, LOADING = "START", "PLAYING", "LOADING"
+game_state = LOADING
+loading_duration = 5  
+loading_start_time = pygame.time.get_ticks() / 1000 
 
 class SNAKE:
 	def __init__(self):
@@ -129,6 +130,12 @@ class Screen:
 
         self.screen.blit(title_text, title_rect)
         self.screen.blit(instruction_text, instruction_rect)
+	
+    def draw_loading_screen(self):
+        self.screen.fill((50, 50, 50))
+        loading_text = self.game_font.render("Loading Camera...", True, (255, 255, 255))
+        loading_rect = loading_text.get_rect(center=(screen_width // 2, screen_height // 2))
+        self.screen.blit(loading_text, loading_rect)
 
 
 class MAIN:
@@ -198,10 +205,10 @@ class MAIN:
 
 pygame.mixer.pre_init(44100,-16,2,512)
 pygame.init()
-# Define the screen dimensions
+
 cell_size = 30
 cell_number = 20
-webcam_width = 640  # Width for the webcam feed
+webcam_width = 640  
 screen_width = (cell_number * cell_size) + webcam_width
 screen_height = cell_number * cell_size
 
@@ -306,7 +313,13 @@ while True:
                 game_state = PLAYING
                 print("Game state changed to PLAYING")
 
-    if game_state == START:
+    if game_state == LOADING:
+        screen_manager.draw_loading_screen()
+        current_time = pygame.time.get_ticks() / 1000
+        if current_time - loading_start_time >= loading_duration:
+            game_state = START
+
+    elif game_state == START:
         screen.fill((50, 50, 50)) 
         screen_manager.draw_start_screen()
 
@@ -329,7 +342,6 @@ while True:
                 except Exception as e:
                     print(f"Error displaying webcam feed: {e}")
 
-     
         if not 0 <= main_game.snake.body[0].x < cell_number or not 0 <= main_game.snake.body[0].y < cell_number:
             print("Collision with wall. Resetting game...")
             main_game.snake.reset()
@@ -343,3 +355,4 @@ while True:
 
     pygame.display.update()
     clock.tick(60)
+
