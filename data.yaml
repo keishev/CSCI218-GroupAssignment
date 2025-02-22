@@ -1,0 +1,7 @@
+# Correct dataset file for classification
+path: D:\University\Projects\Python\CSCI218-GroupAssignment\Datasets
+
+train: train
+val: val
+
+# Automatically detects class names from subfolders

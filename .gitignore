@@ -1,3 +1,6 @@
 Datasets
 *.pt2
 .idea
+runs
+/Yolo-Small/Small-Dataset/
+*.pt
