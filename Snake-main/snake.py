@@ -176,9 +176,15 @@ class MAIN:
 
 pygame.mixer.pre_init(44100,-16,2,512)
 pygame.init()
-cell_size = 40
+# Define the screen dimensions
+cell_size = 30
 cell_number = 20
-screen = pygame.display.set_mode((cell_number * cell_size,cell_number * cell_size))
+webcam_width = 640  # Width for the webcam feed
+screen_width = (cell_number * cell_size) + webcam_width
+screen_height = cell_number * cell_size
+
+screen = pygame.display.set_mode((screen_width, screen_height))
+
 clock = pygame.time.Clock()
 apple = pygame.image.load('Graphics/apple.png').convert_alpha()
 game_font = pygame.font.Font('Font/PoetsenOne-Regular.ttf', 25)
@@ -204,98 +210,89 @@ game_speed_thread = threading.Thread(target=game_speed_controller, daemon=True)
 game_speed_thread.start()
 
 # Input handling using keyboard module
-
+import cv2
+cap = cv2.VideoCapture(0)
 def input_handler():
-	import cv2
-	import torch
-	from ultralytics import YOLO
+    import torch
+    from ultralytics import YOLO
 
-	# Determine device and load model
-	device = "cuda" if torch.cuda.is_available() else "cpu"
-	print(f"Using device: {device}")
-	model = YOLO("best.pt")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Using device: {device}")
+    model = YOLO("best.pt")
 
-	# Open the webcam
-	cap = cv2.VideoCapture(0)
-	if not cap.isOpened():
-		print("Error: Could not open webcam.")
-		return
+    global shared_frame
+    prev_time = time.time()
+    print("YOLO thread running.")
 
-	prev_time = time.time()
-	print("YOLO thread running. Press 'q' in the window to quit.")
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            print("Error: Could not read frame.")
+            break
 
-	while True:
-		ret, frame = cap.read()
-		if not ret:
-			print("Error: Could not read frame.")
-			break
+        results = model.predict(frame, device=device)
+        prediction = results[0]
+        probs = prediction.probs
+        class_names = prediction.names
 
-		# Run classification inference on the frame
-		results = model.predict(frame, device=device)
-		prediction = results[0]
-		probs = prediction.probs  # 'Probs' object
-		class_names = prediction.names
+        top1_idx = probs.top1
+        top1_conf = probs.top1conf
+        top1_label = class_names[top1_idx]
 
-		# Retrieve top-1 index and confidence
-		top1_idx = probs.top1
-		top1_conf = probs.top1conf
-		top1_label = class_names[top1_idx]
-		if top1_conf > 0.8:
-			if top1_label == "like":
-				with main_game.snake.direction_lock:
-					if main_game.snake.direction.y != 1:
-						main_game.snake.direction = Vector2(0, -1)
-			elif top1_label == "dislike":
-				with main_game.snake.direction_lock:
-					if main_game.snake.direction.y != -1:
-						main_game.snake.direction = Vector2(0, 1)
-			elif top1_label == "stop":
-				with main_game.snake.direction_lock:
-					if main_game.snake.direction.x != 1:
-						main_game.snake.direction = Vector2(-1, 0)
-			elif top1_label == "stop_inverted":
-				with main_game.snake.direction_lock:
-					if main_game.snake.direction.x != -1:
-						main_game.snake.direction = Vector2(1, 0)
+        if top1_conf > 0.8:
+            with main_game.snake.direction_lock:
+                if top1_label == "like" and main_game.snake.direction.y != 1:
+                    main_game.snake.direction = Vector2(0, -1)
+                elif top1_label == "dislike" and main_game.snake.direction.y != -1:
+                    main_game.snake.direction = Vector2(0, 1)
+                elif top1_label == "stop" and main_game.snake.direction.x != 1:
+                    main_game.snake.direction = Vector2(-1, 0)
+                elif top1_label == "stop_inverted" and main_game.snake.direction.x != -1:
+                    main_game.snake.direction = Vector2(1, 0)
 
-		# Add the classification info onto the frame
-		text = f"{top1_label} ({float(top1_conf):.2f})"
-		cv2.putText(frame, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX,
-					1, (0, 255, 0), 2)
+        text = f"{top1_label} ({float(top1_conf):.2f})"
+        cv2.putText(frame, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
-		# Display FPS
-		curr_time = time.time()
-		fps = 1 / (curr_time - prev_time) if (curr_time - prev_time) > 0 else 0
-		prev_time = curr_time
-		cv2.putText(frame, f"FPS: {fps:.2f}", (10, 70),
-					cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        curr_time = time.time()
+        fps = 1 / (curr_time - prev_time) if (curr_time - prev_time) > 0 else 0
+        prev_time = curr_time
+        cv2.putText(frame, f"FPS: {fps:.2f}", (10, 70),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
-		cv2.imshow("YOLO Classification", frame)
-		if cv2.waitKey(1) & 0xFF == ord('q'):
-			break
+        with frame_lock:
+            shared_frame = frame.copy()
 
-	cap.release()
-	cv2.destroyAllWindows()
+
+
 
 
 input_thread = threading.Thread(target=input_handler, daemon=True)
 input_thread.start()
 
-# Main game loop
+shared_frame = None
+frame_lock = threading.Lock()
+
 while True:
-	for event in pygame.event.get():
-		if event.type == pygame.QUIT:
-			pygame.quit()
-			sys.exit()
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
 
-	# Update game state if flagged
-	with game_update_lock:
-		if game_update_flag:
-			main_game.update()
-			game_update_flag = False
+    with game_update_lock:
+        if game_update_flag:
+            main_game.update()
+            game_update_flag = False
 
-	# Drawing
-	screen.fill((175,215,70))
-	main_game.draw_elements()
-	pygame.display.update()
-	clock.tick(60)
+    screen.fill((175, 215, 70))
+    main_game.draw_elements()
+
+    # Draw the webcam feed with YOLO inference
+    if shared_frame is not None:
+        frame = cv2.resize(shared_frame, (webcam_width, screen_height))
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frame_surface = pygame.surfarray.make_surface(frame.swapaxes(0, 1))
+        screen.blit(frame_surface, (cell_number * cell_size, 0))
+
+    pygame.display.update()
+    clock.tick(60)
+
