@@ -207,7 +207,8 @@ pygame.init()
 
 cell_size = 30
 cell_number = 20
-webcam_width = 640  
+webcam_width = 640
+webcam_height = 480
 screen_width = (cell_number * cell_size) + webcam_width
 screen_height = cell_number * cell_size
 
@@ -269,13 +270,13 @@ def input_handler():
 
         if top1_conf > 0.8:
             with main_game.snake.direction_lock:
-                if top1_label == "up" and main_game.snake.direction.y != 1:
+                if top1_label == "like" and main_game.snake.direction.y != 1:
                     main_game.snake.direction = Vector2(0, -1)
-                elif top1_label == "down" and main_game.snake.direction.y != -1:
+                elif top1_label == "dislike" and main_game.snake.direction.y != -1:
                     main_game.snake.direction = Vector2(0, 1)
-                elif top1_label == "fist" and main_game.snake.direction.x != 1:
+                elif top1_label == "stop" and main_game.snake.direction.x != 1:
                     main_game.snake.direction = Vector2(-1, 0)
-                elif top1_label == "ok" and main_game.snake.direction.x != -1:
+                elif top1_label == "stop_inverted" and main_game.snake.direction.x != -1:
                     main_game.snake.direction = Vector2(1, 0)
 
         text = f"{top1_label} ({float(top1_conf):.2f})"
@@ -334,7 +335,7 @@ while True:
         with frame_lock:
             if shared_frame is not None:
                 try:
-                    frame = cv2.resize(shared_frame, (webcam_width, screen_height))
+                    frame = cv2.resize(shared_frame, (webcam_width, webcam_height))
                     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     frame_surface = pygame.surfarray.make_surface(frame.swapaxes(0, 1))
                     screen.blit(frame_surface, (cell_number * cell_size, 0))
