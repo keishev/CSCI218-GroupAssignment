@@ -1,0 +1,2 @@
+Augmented data is not ideal for this model. Please use original data.
+Left and Right images are rotated image of Up and Down images, very baddddd.

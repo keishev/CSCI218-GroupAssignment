@@ -9,7 +9,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using device: {device}")
 
 # Load a YOLO classification model
-model = YOLO("game/best.pt")
+model = YOLO("best.pt")
 
 # Open the webcam
 cap = cv2.VideoCapture(0)

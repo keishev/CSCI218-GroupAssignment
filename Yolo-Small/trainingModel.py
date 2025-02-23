@@ -14,7 +14,7 @@ def main():
     #    If you have a data.yaml, specify data='data.yaml'.
     #    Or directly reference your train/val directories.
     results = model.train(
-        data="D:/University/Projects/Python/CSCI218-GroupAssignment/Datasets",
+        data="D:/University/Projects/Python/CSCI218-GroupAssignment/Yolo-Small/Small-Dataset",
         epochs=10,
         imgsz=512,          # Common image size for classification
         batch=8,
